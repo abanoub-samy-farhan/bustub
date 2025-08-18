@@ -16,7 +16,13 @@ namespace bustub {
 
 /** @brief Parameterized constructor. */
 template <typename KeyType>
-HyperLogLog<KeyType>::HyperLogLog(int16_t n_bits) : cardinality_(0) {}
+HyperLogLog<KeyType>::HyperLogLog(int16_t n_bits) {
+  cardinality_ = 0;
+  b = n_bits;
+  if (b >= 0){
+    buckets = std::vector<uint64_t>(1ULL << b, 0);
+  }
+}
 
 /**
  * @brief Function that computes binary.
@@ -27,7 +33,8 @@ HyperLogLog<KeyType>::HyperLogLog(int16_t n_bits) : cardinality_(0) {}
 template <typename KeyType>
 auto HyperLogLog<KeyType>::ComputeBinary(const hash_t &hash) const -> std::bitset<BITSET_CAPACITY> {
   /** @TODO(student) Implement this function! */
-  return {0};
+  std::bitset<BITSET_CAPACITY> binaryRep(hash);
+  return binaryRep;
 }
 
 /**
@@ -39,7 +46,10 @@ auto HyperLogLog<KeyType>::ComputeBinary(const hash_t &hash) const -> std::bitse
 template <typename KeyType>
 auto HyperLogLog<KeyType>::PositionOfLeftmostOne(const std::bitset<BITSET_CAPACITY> &bset) const -> uint64_t {
   /** @TODO(student) Implement this function! */
-  return 0;
+  for (int i = BITSET_CAPACITY - 1; i >= 0; i--){
+    if (bset[i]) return BITSET_CAPACITY - i;
+  }
+  return BITSET_CAPACITY;
 }
 
 /**
@@ -50,6 +60,15 @@ auto HyperLogLog<KeyType>::PositionOfLeftmostOne(const std::bitset<BITSET_CAPACI
 template <typename KeyType>
 auto HyperLogLog<KeyType>::AddElem(KeyType val) -> void {
   /** @TODO(student) Implement this function! */
+  if (b < 0) return;
+  hash_t hashValue = CalculateHash(val);
+  std::bitset<BITSET_CAPACITY> binaryRep(ComputeBinary(hashValue));
+  uint64_t bucket_num = (binaryRep >> (BITSET_CAPACITY - b)).to_ullong();
+  binaryRep <<= b;
+  uint64_t leftmost = PositionOfLeftmostOne(binaryRep);
+  if (bucket_num < buckets.size()) {
+    buckets[bucket_num] = std::max(buckets[bucket_num], leftmost);
+  }
 }
 
 /**
@@ -58,6 +77,14 @@ auto HyperLogLog<KeyType>::AddElem(KeyType val) -> void {
 template <typename KeyType>
 auto HyperLogLog<KeyType>::ComputeCardinality() -> void {
   /** @TODO(student) Implement this function! */
+  if (b < 0) return;
+
+  uint64_t m = buckets.size();
+  double total = 0.0;
+  for (uint64_t i = 0; i < m; i++){
+    total += pow(2, -(double)buckets[i]);
+  }
+  cardinality_ = std::floor((double)(CONSTANT * m * m) / total);
 }
 
 template class HyperLogLog<int64_t>;
