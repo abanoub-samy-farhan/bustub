@@ -19,53 +19,44 @@ template <typename KeyType>
 HyperLogLogPresto<KeyType>::HyperLogLogPresto(int16_t n_leading_bits) {
   cardinality_ = 0;
   b = n_leading_bits;
-  if (b >= 0){
-    dense_bucket_ = std::vector<std::bitset<DENSE_BUCKET_SIZE>>(1ULL << b, 0);
+  if (b >= 0) {
+    dense_bucket_.resize(1ULL << b, 0);
   }
 }
 
 /** @brief Element is added for HLL calculation. */
 template <typename KeyType>
 auto HyperLogLogPresto<KeyType>::AddElem(KeyType val) -> void {
-  /** @TODO(student) Implement this function! */
+  /** @TODO(student) Implement this For calculating hash, you can use the given function:
+
+function! */
   if (b < 0) return;
-  uint16_t lsb = 0;
+  int16_t lsb = 0;
   hash_t hashVal = CalculateHash(val);
   std::bitset<64> binaryRep(hashVal);
   uint16_t num = (binaryRep >> (64 - b)).to_ullong();
+  binaryRep = (binaryRep << b) >> b;
+  
 
-
-  while (!binaryRep[lsb] and lsb < 64 - b){
+  while (!binaryRep[lsb] and lsb < 64 - b) {
     lsb++;
   }
 
-
-
-  std::bitset<TOTAL_BUCKET_SIZE> rightmost(lsb);
-  std::bitset<OVERFLOW_BUCKET_SIZE> overflow ((rightmost >> DENSE_BUCKET_SIZE).to_ullong());
-
-
-  if (overflow.to_ullong() != 0){
-    if (overflow_bucket_.count(num)){
-      if (overflow_bucket_[num].to_ullong() < overflow.to_ullong())
-        overflow_bucket_[num] = overflow;
-    } else {
-      overflow_bucket_[num] = overflow;
-    }
-    std::bitset<TOTAL_BUCKET_SIZE> tmp(overflow.to_ullong());
-    rightmost = rightmost ^ (tmp << DENSE_BUCKET_SIZE);
+  std::bitset<TOTAL_BUCKET_SIZE> total(lsb);
+  std::bitset<DENSE_BUCKET_SIZE> dense;
+  std::bitset<OVERFLOW_BUCKET_SIZE> overflow;
+  for (uint16_t i = 0; i < DENSE_BUCKET_SIZE; i++){
+    dense[i] = total[i];
+  }
+  for (uint16_t i = DENSE_BUCKET_SIZE; i < TOTAL_BUCKET_SIZE; i++){
+    overflow[i - DENSE_BUCKET_SIZE] = total[i];
   }
 
-  std::bitset<DENSE_BUCKET_SIZE> base(rightmost.to_ullong());
-  if (num < dense_bucket_.size()){
-    if (dense_bucket_[num].to_ullong()){
-      if (dense_bucket_[num].to_ullong() < base.to_ullong())
-        dense_bucket_[num] = base;
-    } else {
-      dense_bucket_[num] = base;
-    }
+  unsigned long long current_val = (overflow_bucket_[num].to_ullong() << DENSE_BUCKET_SIZE) | dense_bucket_[num].to_ullong();
+  if (total.to_ullong() > current_val){
+    dense_bucket_[num] = dense;
+    overflow_bucket_[num] = overflow;
   }
-
 }
 
 /** @brief Function to compute cardinality. */
@@ -74,11 +65,14 @@ auto HyperLogLogPresto<T>::ComputeCardinality() -> void {
   /** @TODO(student) Implement this function! */
   if (b < 0) return;
 
-
   double total = 0;
   double m = dense_bucket_.size();
-  for (uint16_t i = 0; i < dense_bucket_.size(); i++){
-    total += pow(2, -(double)dense_bucket_[i].to_ullong());
+  for (uint16_t i = 0; i < (uint16_t)m; i++) {
+    unsigned long long dense_val = dense_bucket_[i].to_ullong();
+    unsigned long long overflow_val = overflow_bucket_[i].to_ullong();
+    unsigned long long full_val = (overflow_val << DENSE_BUCKET_SIZE) | dense_val;
+    
+    total += pow(2.0, -(double)full_val);
   }
 
   if (total == 0) return;
